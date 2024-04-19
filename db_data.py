@@ -2,43 +2,139 @@ import psycopg2
 import pyodbc as sql
 
 def query(new_date, now):
-    QUERY = (f"""select qs."Name" ,v1."Name" \"Отправитель\", l2.\"Name\"  \"получатель\"  ,l.\"DocN\" \"Номер документа\", ps.\"Name\", q.\"InsertDateTime\" 
+    QUERY = (f"""select 
+    qs."Name" ,
+    v2."Name" \"Отправитель\",
+    v3."Name" "Департамент отправителя",
+     l2.\"Name\"  \"получатель\",
+      v4."Name" "Департамент получателя",
+      l.\"DocN\" \"Номер документа\",
+      j.\"Name\" \"Наименование журнала регистрации\", 
+    case when ps."Name" ='Отказ в регистрации' then 'Ошибка на стороне получателя' else ps."Name" end,
+     q.\"InsertDateTime\" 
 from ldexchangequeue q 
 join ldexchangestate qs on q."StateID" = qs."ID"
 join ldexchangeobject eo on eo.\"ExportItemID\" =q.\"ID\" 
 left join ldexchangereceiver r on r.\"ExportItemID\" =q.\"ID\" 
 left join ldvocabulary l2 on l2.\"ID\" =r.\"MemberID\" 
+left join lduser u1 on l2."ID" = u1."ID"
+left join ldvocabulary v4 on v4."ID"=u1."DepartmentID" 
 join ldmail m on m.\"ID\" =eo.\"ObjectID\" 
 join lderc l on l.\"ID\" =m.\"BaseERCID\" 
 join ldjournal j on j.\"ID\" = l.\"JournalID\"
-join ldvocabulary v1 on v1."ID" = j."DepartmentID"
+join ldvocabulary v2 on v2."ID" = m."CreatorID" 
+left join lduser u on v2."ID" = u."ID"
+left join ldvocabulary v3 on v3."ID"=u."DepartmentID" 
 join ldobject ob on ob."ID" =l."ID" 
 left join cls_esexportpacket ce on ce."PacketUid" = r."PacketUid"
 left join cls_espacketstate ps on ps."Id" = ce."StateId" 
 where q."InsertDateTime" > '{str(new_date.strftime('%Y%m%d'))}' and q."InsertDateTime" < '{str(now.strftime('%Y%m%d'))}' and
- q."Tag" ='Outgoing docs'
- order by q.\"ID\"""" )
+ q."Tag" ='Outgoing docs' and (qs."Name" !='Выгружен' or(qs."Name" ='Выгружен' and r."PacketUid"  is not null))
+ order by q.\"ID\";
+""" )
+    return QUERY
+def error_packets(new_date, now):
+    QUERY = f"""INSERT INTO ldexchange_packet_error("ID", "QPacketState", "EPacketState" )
+    select q."ID", q."StateID", ce."StateId"
+from ldexchangequeue q 
+left join ldexchangereceiver r on r.\"ExportItemID\" =q.\"ID\" 
+left join cls_esexportpacket ce on ce."PacketUid" = r."PacketUid"
+left join cls_espacketstate ps on ps."Id" = ce."StateId" 
+where not exists(
+Select null
+from ldexchange_packet_error
+where ldexchange_packet_error."ID" = q."ID"
+) and q."InsertDateTime" > '{str(new_date.strftime('%Y%m%d'))}' and q."InsertDateTime" < '{str(now.strftime('%Y%m%d'))}' and
+ q."Tag" ='Outgoing docs' and (q."StateID" = 4 or ce."StateId" in(4,5,8,12))
+ order by q.\"ID\""""
     return QUERY
 
-def count_query(new_date, now):
-    COUNT_QUERY = f"""select count(q."ID"), ps.\"Name\" 
+def select_error_packets():
+    sql = """select qs."Name" ,v2."Name" \"Отправитель\",v3."Name" "Департамент отправителя",
+     l2.\"Name\"  \"получатель\" , v4."Name" "Департамент получателя" ,l.\"DocN\" \"Номер документа\",j.\"Name\" \"Наименование журнала регистрации\",
+     case when ps."Name" ='Отказ в регистрации' then 'Ошибка на стороне получателя' else ps."Name" end,
+      q.\"InsertDateTime\", q."ID"     
 from ldexchangequeue q 
+join ldexchange_packet_error pe on pe."ID" = q."ID"
 join ldexchangestate qs on q."StateID" = qs."ID"
 join ldexchangeobject eo on eo.\"ExportItemID\" =q.\"ID\" 
 left join ldexchangereceiver r on r.\"ExportItemID\" =q.\"ID\" 
 left join ldvocabulary l2 on l2.\"ID\" =r.\"MemberID\" 
+left join lduser u1 on l2."ID" = u1."ID"
+left join ldvocabulary v4 on v4."ID"=u1."DepartmentID" 
 join ldmail m on m.\"ID\" =eo.\"ObjectID\" 
 join lderc l on l.\"ID\" =m.\"BaseERCID\" 
+join ldjournal j on j.\"ID\" = l.\"JournalID\"
+join ldvocabulary v2 on v2."ID" = m."CreatorID"
+left join lduser u on v2."ID" = u."ID"
+left join ldvocabulary v3 on v3."ID"=u."DepartmentID" 
+join ldobject ob on ob."ID" =l."ID" 
+left join cls_esexportpacket ce on ce."PacketUid" = r."PacketUid"
+left join cls_espacketstate ps on ps."Id" = ce."StateId" 
+where (qs."Name" !='Выгружен' or(qs."Name" ='Выгружен' and r."PacketUid"  is not null))
+ order by q.\"ID\""""
+
+    return sql
+def delete_error_packet(packet_id):
+    query =f"""delete from ldexchange_packet_error where "ID" = {str(packet_id)}"""
+    return query
+def query_svod(new_date, now):
+    QUERY = f"""select t."Номер документа", t."Наименование журнала регистрации",t."Отправитель",
+"InsertDateTime" as "Дата и время отправки",
+		count(t."Номер документа") as "Кол-во отправленных пакетов", 
+		sum(case when t."PacketState" ='Зарегистрирован' then 1 else 0 end) "Зарегистрирован",
+		sum(case when t."PacketState" ='Отправлен' then 1 else 0 end) "Отправлен",
+		sum(case when t."PacketState" ='Доставлен' then 1 else 0 end) "Доставлен",
+		sum(case when t."PacketState" ='Отказ в регистрации' then 1 else 0 end) "Ошибка на стороне получателя",
+		sum(case when t."PacketState" ='Ошибка отправки' then 1 else 0 end) "Ошибка отправки",
+		sum(case when t."ExportState" ='Ошибка выгрузки' then 1 else 0 end) "Ошибка выгрузки",
+		sum(case when t."ExportState" ='Отменён' then 1 else 0 end) "Отменён"
+from 
+(select qs."Name" as "ExportState",v2."Name" "Отправитель", l2."Name"  "Получатель"  ,l."DocN" "Номер документа",j."Name" "Наименование журнала регистрации", ps."Name" as "PacketState", 
+to_char(q."InsertDateTime",'dd.MM.yyyy HH:MI') "InsertDateTime"
+from ldexchangequeue q 
+join ldexchangestate qs on q."StateID" = qs."ID"
+join ldexchangeobject eo on eo."ExportItemID" =q."ID" 
+left join ldexchangereceiver r on r."ExportItemID" =q."ID" 
+left join ldvocabulary l2 on l2."ID" =r."MemberID" 
+join ldmail m on m."ID" =eo."ObjectID" 
+join lderc l on l."ID" =m."BaseERCID" 
+join ldjournal j on j."ID" = l."JournalID"
+join ldvocabulary v1 on v1."ID" = j."DepartmentID"
+join ldvocabulary v2 on v2."ID" = m."CreatorID"
 join ldobject ob on ob."ID" =l."ID" 
 left join cls_esexportpacket ce on ce."PacketUid" = r."PacketUid"
 left join cls_espacketstate ps on ps."Id" = ce."StateId" 
 where q."InsertDateTime" > '{str(new_date.strftime('%Y%m%d'))}' and q."InsertDateTime" < '{str(now.strftime('%Y%m%d'))}' and
- q."Tag" ='Outgoing docs'
- group by ps.\"Name\""""
+ q."Tag" ='Outgoing docs' and (qs."Name" !='Выгружен' or(qs."Name" ='Выгружен' and r."PacketUid"  is not null))
+ order by q."InsertDateTime") as t
+ group by t."Номер документа", t."Наименование журнала регистрации",t."Отправитель",
+"InsertDateTime" order by "InsertDateTime" asc """
+    return QUERY
+def count_query(new_date, now):
+    COUNT_QUERY = f"""select
+count(q."ID"), case when ps."Name" is null then qs."Name"
+                when ps."Name" = 'Отказ в регистрации' then 'Ошибка на стороне получателя'
+                else ps."Name" end
+from ldexchangequeue q
+join ldexchangestate qs on q."StateID" = qs."ID"
+join ldexchangeobject eo on eo."ExportItemID" =q."ID"
+left join ldexchangereceiver r on r."ExportItemID" =q."ID"
+left join ldvocabulary l2 on l2."ID" =r."MemberID"
+join ldmail m on m."ID" =eo."ObjectID"
+join lderc l on l."ID" =m."BaseERCID"
+join ldobject ob on ob."ID" =l."ID"
+left join cls_esexportpacket ce on ce."PacketUid" = r."PacketUid"
+left join cls_espacketstate ps on ps."Id" = ce."StateId"
+where q."InsertDateTime" > '{str(new_date.strftime('%Y%m%d'))}' and q."InsertDateTime" < '{str(now.strftime('%Y%m%d'))}' and
+ q."Tag" ='Outgoing docs'  and (r."PacketUid" is null or ce."Id" is not null)
+ group by case when ps."Name" is null then qs."Name"
+                when ps."Name" = 'Отказ в регистрации' then 'Ошибка на стороне получателя'
+                else ps."Name" end """
     return COUNT_QUERY
 
 def query_by_department(new_date, now, dep_id):
-    QUERY_BY_department = f"""select qs."Name" ,v1.\"Name\" \"Отправитель\", l2.\"Name\"  \"получатель\"  ,l.\"DocN\" \"Номер документа\", ps.\"Name\", q.\"InsertDateTime\"    
+    QUERY_BY_department = f"""select qs."Name" ,v1.\"Name\" \"Отправитель\", l2.\"Name\"  \"получатель\"  ,l.\"DocN\" \"Номер документа\",j.\"Name\" \"Наименование журнала регистрации\", ps.\"Name\", q.\"InsertDateTime\"    
 from ldexchangequeue q 
 join ldexchangestate qs on q."StateID" = qs."ID"
 join ldexchangeobject eo on eo.\"ExportItemID\" =q.\"ID\" 
@@ -77,6 +173,7 @@ def get_query(db_name, username,password,host,query):
     connect = psycopg2.connect(dbname=db_name, user=username, password=password, host=host,)
     cur = connect.cursor()
     cur.execute(query=query)
+
     return cur
 
 

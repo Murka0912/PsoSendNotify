@@ -1,10 +1,64 @@
 import xlwt
+from openpyxl import load_workbook
 import os
-def exportDataxls(rows, date, newdate, rows1):
+
+def append_to_xlsx(filename, svod_rows, count_rows, error_rows):
+    wb = load_workbook(filename)
+    ws = wb['Исходящая ПСО сводный']
+
+def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
 
 
     wb = xlwt.Workbook(encoding='utf-8')
-    ws = wb.add_sheet('Исходящая корреспондениция ПСО')
+    #Сводный отчет
+    ws_svod = wb.add_sheet('Исходящая ПСО сводный')
+    new_row_num = 0
+    borders_svod = xlwt.Borders()
+    borders_svod.bottom = 1
+    borders_svod.left = 1
+    borders_svod.right = 1
+    borders_svod.top = 1
+    borders_svod.bottom_colour = 0
+    borders_svod.right_colour = 0
+    borders_svod.left_colour = 0
+    borders_svod.top_colour = 0
+    font_style_svod = xlwt.XFStyle()
+    font_svod = xlwt.Font()
+    font_svod.bold = True
+    font_style_svod.font = font_svod
+    style_string_svod = "font: bold on; borders: bottom 1; borders: left 1; borders: right 1; borders: top 1"
+    style = xlwt.easyxf(style_string_svod)
+    columns_svod = ["Номер документа", "Наименование журнала регистрации", "Отправитель", "Департамент отправителя", "Дата и время отправки",
+                    "Кол-во отправленных пакетов",
+               "Зарегистрирован", "Отправлен","Доставлен","Ошибка на стороне получателя","Ошибка отправки","Ошибка выгрузки"]
+
+    font_style_svod.borders = borders_svod
+    for col_num in range(len(columns_svod)):
+        ws_svod.write(new_row_num, col_num, columns_svod[col_num], style)
+        cells = xlwt.Column(col_num, ws_svod)
+        cells.width = 5000
+    for row in svod_rows:
+        new_row_num += 1
+        a = [row[0],row[1],row[2],str(row[3]),row[4],row[5], row[6],row[7],row[8],row[9],row[10]]
+
+        for col_num in range(len(a)):
+            ws_svod.col(0).width = 30 * 256
+            ws_svod.col(1).width = 50 * 256
+            ws_svod.col(2).width = 30 * 256
+            ws_svod.col(3).width = 30 * 256
+            ws_svod.col(4).width = 30 * 256
+            ws_svod.col(5).width = 10 * 256
+            ws_svod.col(6).width = 10 * 256
+            ws_svod.col(7).width = 10 * 256
+            ws_svod.col(8).width = 10 * 256
+            ws_svod.col(9).width = 10 * 256
+            ws_svod.col(10).width = 10 * 256
+            #ws_svod.col(11).width = 10 * 256
+            ws_svod.write(new_row_num, col_num, a[col_num], font_style_svod)
+
+    print('запись сводного отчета кол-во строк: ', len(svod_rows))
+    # подробный отчет
+    ws = wb.add_sheet('Исходящая ПСО подробный')
 
     # Sheet header, first row
     new_row_num = 0
@@ -25,7 +79,8 @@ def exportDataxls(rows, date, newdate, rows1):
     style_string = "font: bold on; borders: bottom 1; borders: left 1; borders: right 1; borders: top 1"
     style = xlwt.easyxf(style_string)
 
-    columns = ['Статус выгрузки','Отправитель','Получатель','Номер документа','Текущий статус пакета','Дата и время постановки в очередь']
+    columns = ['Статус выгрузки','Отправитель', 'департамент отправителя','Получатель', 'Департамент получателя','Номер документа','Наименование журнала регистрации',
+               'Текущий статус пакета','Дата и время постановки в очередь']
     font_style = xlwt.XFStyle()
 
     font_style.borders = borders
@@ -60,24 +115,84 @@ def exportDataxls(rows, date, newdate, rows1):
 
     for row in rows:
         row_num += 1
-        a = [row[0],row[1],row[2],row[3],row[4], str(row[5]) ]
+        a = [row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7], str(row[8]) ]
 
         for col_num in range(len(a)):
             ws.col(0).width = 30 * 256
-            ws.col(1).width = 100 * 256
+            ws.col(1).width = 50 * 256
             ws.col(2).width = 30 * 256
             ws.col(3).width = 30 * 256
             ws.col(4).width = 30 * 256
+
             ws.col(5).width = 30 * 256
+            ws.col(6).width = 30 * 256
+            ws.col(7).width = 30 * 256
+            ws.col(8).width = 30 * 256
             ws.write(row_num, col_num, a[col_num], font_style)
         #
         #ws.write(row_num, , [[row.srvaddr],[row.namedisk], [str(row.freespace)],[str(row.allspace)],[row.date_up]], font_style)
-    print('start adding new table', row_num)
+    print('start adding new table', len(rows))
 
+    #error book
+    ws_error = wb.add_sheet('Исходящая ПСО ошибки')
+
+    # Sheet header, first row
+    new_row_num_error = 0
+    borders_error = xlwt.Borders()
+    borders_error.bottom = 1
+    borders_error.left = 1
+    borders_error.right = 1
+    borders_error.top = 1
+    borders_error.bottom_colour = 0
+    borders_error.right_colour = 0
+    borders_error.left_colour = 0
+    borders_error.top_colour = 0
+    font_style_error = xlwt.XFStyle()
+    font_error = xlwt.Font()
+    font_error.bold = True
+    font_style_error.font = font_error
+
+    style_string_error = "font: bold on; borders: bottom 1; borders: left 1; borders: right 1; borders: top 1"
+    style_error = xlwt.easyxf(style_string_error)
+
+    columns_error = ['Статус выгрузки', 'Отправитель',"Департамент отправителя", 'Получатель','Департамент получателя', 'Номер документа', 'Наименование журнала регистрации',
+               'Текущий статус пакета', 'Дата и время постановки в очередь']
+    font_style_error = xlwt.XFStyle()
+
+    font_style_error.borders = borders
+
+    # for col_num_error in range(len(columns)):
+    #     ws_error.write(new_row_num_error, col_num_error, columns_error[col_num_error], style_error)
+    #
+    #     # Sheet body, remaining rows
+    #     cells_error = xlwt.Column(col_num_error, ws_error)
+    #
+    #     cells_error.width = 5000
+
+    for row_error in error_rows:
+        new_row_num_error += 1
+        a_error = [row_error[0], row_error[1], row_error[2], row_error[3], row_error[4], row_error[5], row_error[6], row_error[7],str(row_error[8])]
+
+        for col_num_error in range(len(a)):
+            ws_error.col(0).width = 30 * 256
+            ws_error.col(1).width = 50 * 256
+            ws_error.col(2).width = 30 * 256
+            ws_error.col(3).width = 30 * 256
+            ws_error.col(4).width = 30 * 256
+            ws_error.col(5).width = 30 * 256
+            ws_error.col(6).width = 30 * 256
+            ws_error.col(7).width = 30 * 256
+            ws_error.col(8).width = 30 * 256
+            ws_error.write(new_row_num_error, col_num_error, a_error[col_num_error], font_style_error)
+        #
+        # ws.write(row_num, , [[row.srvaddr],[row.namedisk], [str(row.freespace)],[str(row.allspace)],[row.date_up]], font_style)
+    print('start adding error table', len(error_rows))
     try:
         os.mkdir(".\\reports\\")
-        wb.save(f".\\reports\\Отчет ПСО отправленные док-ты-(с {newdate.strftime('%Y-%m-%d')} по {date.strftime('%Y-%m-%d')}).xls")
+
     except: print('ALready')
+    wb.save(
+        f".\\reports\\Отчет ПСО отправленные док-ты-(с {newdate.strftime('%Y-%m-%d')} по {date.strftime('%Y-%m-%d')}).xls")
 def create_report_APE(rows, date):
 
 
@@ -103,7 +218,7 @@ def create_report_APE(rows, date):
     style_string = "font: bold on; borders: bottom 1; borders: left 1; borders: right 1; borders: top 1"
     style = xlwt.easyxf(style_string)
 
-    columns = ['Наименование журнала регистрации','рег. дата документа','рег. номсер документа']
+    columns = ['Наименование журнала регистрации','рег. дата документа','рег. номер документа']
     font_style = xlwt.XFStyle()
 
     font_style.borders = borders
