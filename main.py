@@ -95,8 +95,8 @@ if dbtype == 'pgsql':
                 docs_wo_resolution = db_data.get_query(db_name=dbname, username=dblogin, password=dbpaswd, host=dbhost, query=ape_query)
                 rows = docs_wo_resolution.fetchall()
                 if rows == []:
-                    print('Выгрузка пустая')
-                    logging.info("Выгрузка пустая")
+                    print('Выгрузка  по резолюциям Артюхина Р.Е. пустая')
+                    logging.info("Выгрузка по резолюциям Артюхина Р.Е. пустая")
                 else:
                     make_xls.create_report_APE(rows,now)
                     files = [f".\\reports\\Список документов без резолюции Артюхин Р.Е. {now.strftime('%Y-%m-%d')}.xls"]
@@ -125,8 +125,8 @@ if dbtype == 'pgsql':
                                               query=count_query_by_dep_id)
             count_rows = count_packets.fetchall()
             if rows == []:
-                print('Выгрузка пустая')
-                logging.info("Выгрузка пустая")
+                print('Выгрузка отправленных пакетов пустая')
+                logging.info("Выгрузка отправленных пакетов пустая")
             else:
                 make_xls.exportDataxls(rows, now, newdate=new_date, rows1=count_rows)
                 files = [

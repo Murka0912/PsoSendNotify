@@ -1,3 +1,5 @@
+import logging
+
 import xlwt
 from openpyxl import load_workbook
 import os
@@ -24,7 +26,7 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
     borders_svod.top_colour = 0
     font_style_svod = xlwt.XFStyle()
     font_svod = xlwt.Font()
-    font_svod.bold = True
+    font_svod.bold = False
     font_style_svod.font = font_svod
     style_string_svod = "font: bold on; borders: bottom 1; borders: left 1; borders: right 1; borders: top 1"
     style = xlwt.easyxf(style_string_svod)
@@ -39,13 +41,13 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
         cells.width = 5000
     for row in svod_rows:
         new_row_num += 1
-        a = [row[0],row[1],row[2],str(row[3]),row[4],row[5], row[6],row[7],row[8],row[9],row[10]]
+        a = [row[0],row[1],row[2],row[3],str(row[4]),row[5],row[6], row[7],row[8],row[9],row[10],row[11]]
 
         for col_num in range(len(a)):
             ws_svod.col(0).width = 30 * 256
             ws_svod.col(1).width = 50 * 256
-            ws_svod.col(2).width = 30 * 256
-            ws_svod.col(3).width = 30 * 256
+            ws_svod.col(2).width = 40 * 256
+            ws_svod.col(3).width = 40 * 256
             ws_svod.col(4).width = 30 * 256
             ws_svod.col(5).width = 10 * 256
             ws_svod.col(6).width = 10 * 256
@@ -53,10 +55,12 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
             ws_svod.col(8).width = 10 * 256
             ws_svod.col(9).width = 10 * 256
             ws_svod.col(10).width = 10 * 256
-            #ws_svod.col(11).width = 10 * 256
-            ws_svod.write(new_row_num, col_num, a[col_num], font_style_svod)
-
-    print('запись сводного отчета кол-во строк: ', len(svod_rows))
+            ws_svod.col(11).width = 10 * 256
+            if int(row[5]) != int(row[6]):
+                ws_svod.write(new_row_num, col_num, a[col_num], style)
+            else:ws_svod.write(new_row_num, col_num, a[col_num], font_style_svod)
+    print(f'запись сводного отчета кол-во строк: {len(svod_rows)}' )
+    logging.info(f'запись сводного отчета кол-во строк: {len(svod_rows)}')
     # подробный отчет
     ws = wb.add_sheet('Исходящая ПСО подробный')
 
@@ -121,9 +125,8 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
             ws.col(0).width = 30 * 256
             ws.col(1).width = 50 * 256
             ws.col(2).width = 30 * 256
-            ws.col(3).width = 30 * 256
-            ws.col(4).width = 30 * 256
-
+            ws.col(3).width = 90 * 256
+            ws.col(4).width = 60 * 256
             ws.col(5).width = 30 * 256
             ws.col(6).width = 30 * 256
             ws.col(7).width = 30 * 256
@@ -131,8 +134,8 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
             ws.write(row_num, col_num, a[col_num], font_style)
         #
         #ws.write(row_num, , [[row.srvaddr],[row.namedisk], [str(row.freespace)],[str(row.allspace)],[row.date_up]], font_style)
-    print('start adding new table', len(rows))
-
+    print(f'Запись подробного отчета, кол-во строк : {len(rows)}' )
+    logging.info(f'Запись подробного отчета, кол-во строк : {len(rows)}')
     #error book
     ws_error = wb.add_sheet('Исходящая ПСО ошибки')
 
@@ -161,13 +164,13 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
 
     font_style_error.borders = borders
 
-    # for col_num_error in range(len(columns)):
-    #     ws_error.write(new_row_num_error, col_num_error, columns_error[col_num_error], style_error)
-    #
-    #     # Sheet body, remaining rows
-    #     cells_error = xlwt.Column(col_num_error, ws_error)
-    #
-    #     cells_error.width = 5000
+    for col_num_error in range(len(columns)):
+        ws_error.write(new_row_num_error, col_num_error, columns_error[col_num_error], style_error)
+
+        # Sheet body, remaining rows
+        cells_error = xlwt.Column(col_num_error, ws_error)
+
+        cells_error.width = 5000
 
     for row_error in error_rows:
         new_row_num_error += 1
@@ -177,8 +180,8 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
             ws_error.col(0).width = 30 * 256
             ws_error.col(1).width = 50 * 256
             ws_error.col(2).width = 30 * 256
-            ws_error.col(3).width = 30 * 256
-            ws_error.col(4).width = 30 * 256
+            ws_error.col(3).width = 90 * 256
+            ws_error.col(4).width = 60 * 256
             ws_error.col(5).width = 30 * 256
             ws_error.col(6).width = 30 * 256
             ws_error.col(7).width = 30 * 256
@@ -186,11 +189,12 @@ def exportDataxls(rows, date, newdate, rows1, svod_rows, error_rows):
             ws_error.write(new_row_num_error, col_num_error, a_error[col_num_error], font_style_error)
         #
         # ws.write(row_num, , [[row.srvaddr],[row.namedisk], [str(row.freespace)],[str(row.allspace)],[row.date_up]], font_style)
-    print('start adding error table', len(error_rows))
+    print(f'Запись отчета по ошибочным пакетам, кол-во строк: {len(error_rows)}' )
+    logging.info(f'Запись отчета по ошибочным пакетам, кол-во строк: {len(error_rows)}')
     try:
         os.mkdir(".\\reports\\")
 
-    except: print('ALready')
+    except: print('папка с отчетами уже существует, не создаём')
     wb.save(
         f".\\reports\\Отчет ПСО отправленные док-ты-(с {newdate.strftime('%Y-%m-%d')} по {date.strftime('%Y-%m-%d')}).xls")
 def create_report_APE(rows, date):

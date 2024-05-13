@@ -79,7 +79,7 @@ def delete_error_packet(packet_id):
     query =f"""delete from ldexchange_packet_error where "ID" = {str(packet_id)}"""
     return query
 def query_svod(new_date, now):
-    QUERY = f"""select t."Номер документа", t."Наименование журнала регистрации",t."Отправитель",
+    QUERY = f"""select t."Номер документа", t."Наименование журнала регистрации",t."Отправитель", t."Департамент отправителя",
 "InsertDateTime" as "Дата и время отправки",
 		count(t."Номер документа") as "Кол-во отправленных пакетов", 
 		sum(case when t."PacketState" ='Зарегистрирован' then 1 else 0 end) "Зарегистрирован",
@@ -90,7 +90,7 @@ def query_svod(new_date, now):
 		sum(case when t."ExportState" ='Ошибка выгрузки' then 1 else 0 end) "Ошибка выгрузки",
 		sum(case when t."ExportState" ='Отменён' then 1 else 0 end) "Отменён"
 from 
-(select qs."Name" as "ExportState",v2."Name" "Отправитель", l2."Name"  "Получатель"  ,l."DocN" "Номер документа",j."Name" "Наименование журнала регистрации", ps."Name" as "PacketState", 
+(select qs."Name" as "ExportState",v2."Name" "Отправитель", v3."Name"  "Департамент отправителя"  ,l."DocN" "Номер документа",j."Name" "Наименование журнала регистрации", ps."Name" as "PacketState", 
 to_char(q."InsertDateTime",'dd.MM.yyyy HH:MI') "InsertDateTime"
 from ldexchangequeue q 
 join ldexchangestate qs on q."StateID" = qs."ID"
@@ -102,13 +102,15 @@ join lderc l on l."ID" =m."BaseERCID"
 join ldjournal j on j."ID" = l."JournalID"
 join ldvocabulary v1 on v1."ID" = j."DepartmentID"
 join ldvocabulary v2 on v2."ID" = m."CreatorID"
+left join lduser u on v2."ID" = u."ID"
+left join ldvocabulary v3 on v3."ID"=u."DepartmentID" 
 join ldobject ob on ob."ID" =l."ID" 
 left join cls_esexportpacket ce on ce."PacketUid" = r."PacketUid"
 left join cls_espacketstate ps on ps."Id" = ce."StateId" 
 where q."InsertDateTime" > '{str(new_date.strftime('%Y%m%d'))}' and q."InsertDateTime" < '{str(now.strftime('%Y%m%d'))}' and
  q."Tag" ='Outgoing docs' and (qs."Name" !='Выгружен' or(qs."Name" ='Выгружен' and r."PacketUid"  is not null))
  order by q."InsertDateTime") as t
- group by t."Номер документа", t."Наименование журнала регистрации",t."Отправитель",
+ group by t."Номер документа", t."Наименование журнала регистрации",t."Отправитель", t."Департамент отправителя",
 "InsertDateTime" order by "InsertDateTime" asc """
     return QUERY
 def count_query(new_date, now):
@@ -179,12 +181,12 @@ def get_query(db_name, username,password,host,query):
 
 def docs_WO_resolution_APE():
     QUERY_APE = """
-    select j."Name" , doc."RegDate" ,doc."DocN"  from dbo.lderc doc
-join dbo.ldjournal j on  j."ID" =doc."JournalID"
-			join dbo.ldobjecttype ot on ot."ID" = j."CardTypeID"
- where
-    doc."StateID" =1
-    and ot."ID" in(2006,2007)
+    select j."Name" , doc."RegDate" ,doc."DocN" from lderc doc
+    join ldjournal j on j."ID"= doc."JournalID"
+         join ldobjecttype ot on ot."ID" = j."CardTypeID"
+         where
+			 ot."ID" in (2006,2007)
+			and doc."StateID"=1
 	AND EXISTS(
 		SELECT NULL
 		FROM dbo.LDMail m
@@ -200,7 +202,7 @@ join dbo.ldjournal j on  j."ID" =doc."JournalID"
 		WHERE
 			m."ERCID" = doc."ID"
 			AND vi."ID" = 341397
-			AND mt."ID" = 927570 --select * from ldmailstate where "ID" in (1,11)
+			AND mt."ID" = 927570
 			AND ms."ID" IN (1,11)
 			AND mr."ARMDocState" = 2
 	)
